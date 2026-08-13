@@ -61,6 +61,16 @@ header.top p{margin:3px 0 0;font-size:11px;color:var(--muted);}
 .controls .seg{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;}
 .controls .seg button{border:none;background:#fff;min-height:42px;padding:0 14px;font-size:14px;font-weight:600;cursor:pointer;color:var(--muted);}
 .controls .seg button.on{background:var(--primary);color:#fff;}
+/* 实时搜索框 */
+.controls .searchbox{display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 12px;
+  border:1px solid var(--border);border-radius:10px;background:#fff;flex:1 1 240px;max-width:360px;cursor:text;}
+.controls .searchbox svg{width:17px;height:17px;color:var(--muted);flex:none;}
+.controls .searchbox input{border:none;outline:none;font-size:14px;min-width:0;flex:1;background:transparent;color:var(--text);}
+.controls .searchbox input::placeholder{color:#9aa5b1;}
+.controls .searchbox:focus-within{border-color:var(--primary);box-shadow:0 0 0 2px rgba(34,132,110,.15);}
+.controls .searchbox .search-n{font-size:11.5px;color:var(--primary-d);font-weight:700;background:#eef6f3;
+  border-radius:999px;padding:2px 9px;flex:none;display:none;white-space:nowrap;}
+.searchbox.active .search-n{display:inline-block;}
 /* table */
 .tbl-scroll{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:920px;}
@@ -168,13 +178,18 @@ a.link:hover{text-decoration:underline;}
   <!-- 总览 -->
   <section class="section">
     <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h0M9 13h0M9 17h0M15 9h0M15 13h0M15 17h0"/></svg>院校招生总览</h2>
-    <div class="sub">院校按地区（华北 / 东北 / 华东 / 华中 / 华南 / 西南 / 西北）分组展示；每个地区内再按教育部学科评估等级由高到低排序（二级分组）。可切换专业，按地区、省份、层次、状态筛选</div>
+    <div class="sub">院校按地区（华北 / 东北 / 华东 / 华中 / 华南 / 西南 / 西北）分组展示；每个地区内再按教育部学科评估等级由高到低排序（二级分组）。可切换专业、<b>关键词实时搜索</b>（校名 / 专业 / 地区，空格分隔多关键词），并按地区、省份、层次、状态筛选</div>
     <div class="sub note">学科评估数据：教育部第五轮（2020）未统一公开发布，故采用<b>第四轮（2016）官方公开结果</b>作为评估等级（临床医学 1002 对应 100208；基础医学 1001 对应 1001）。标注「未参评 / 未公布」者为未进入参评名单的省属 / 地方医学院。评估等级仅供参考，报考请以目标院校研招网当年简章为准。</div>
     <div class="controls">
       <div class="seg" id="majorSeg">
         <button data-m="100208" class="on">100208 临床检验诊断学</button>
         <button data-m="1001">基础医学 1001</button>
       </div>
+      <label class="searchbox" id="searchBox" title="实时搜索：校名 / 专业 / 地区 / 省份 / 关键词，支持空格多关键词">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="fltQuery" type="search" placeholder="搜索校名 / 专业 / 地区 / 关键词…" autocomplete="off" spellcheck="false">
+        <span class="search-n" id="searchN"></span>
+      </label>
       <select id="fltRegion"><option value="">全部地区</option></select>
       <select id="fltProv"><option value="">全部省份</option></select>
       <select id="fltTier"><option value="">全部层次</option><option value="T1">T1 重点(每日)</option><option value="T2">T2 普通(每3天)</option></select>
@@ -5602,14 +5617,27 @@ function renderTable(){
   const fr=document.getElementById("fltRegion").value;
   const ft=document.getElementById("fltTier").value;
   const fs=document.getElementById("fltStatus").value;
+  const fq=(document.getElementById("fltQuery").value||"").trim().toLowerCase();
+  const kws=fq?fq.split(/\s+/):[];
   let rows=state.schools.filter(s=>{
     if(fp&&s.p!==fp)return false;
     if(fr&&regionOf(s.p)!==fr)return false;
     if(ft&&s.t!==ft)return false;
     const r=rec(s,curMajor);
     if(fs&&r[6]!==fs)return false;
+    if(kws.length){
+      const hay=[s.n,s.p,regionOf(s.p),s.t,(s.t==='T1'?"T1 重点 每日":"T2 普通 每3天"),
+        "100208","临床检验诊断学","1001","基础医学",
+        r[6],r[0],r[1],r[2],r[3],r[4]]
+        .map(x=>String(x||"").toLowerCase()).join(" ");
+      if(!kws.every(k=>hay.includes(k)))return false;
+    }
     return true;
   });
+  /* 搜索命中数提示 */
+  const sn=document.getElementById("searchN");
+  const sb=document.getElementById("searchBox");
+  if(sn&&sb){sb.classList.toggle("active",!!fq);sn.textContent=fq?(rows.length+" 所"):"";}
   /* 按方位大区分组 */
   const groups={};
   rows.forEach(s=>{const rg=regionOf(s.p)||"其他";(groups[rg]=groups[rg]||[]).push(s);});
@@ -5721,6 +5749,10 @@ document.getElementById("majorSeg").addEventListener("click",e=>{
   renderAll();
 });
 ["fltRegion","fltProv","fltTier","fltStatus"].forEach(id=>document.getElementById(id).addEventListener("change",renderTable));
+/* 实时搜索：输入即筛选；ESC 清空 */
+const fqEl=document.getElementById("fltQuery");
+fqEl.addEventListener("input",renderTable);
+fqEl.addEventListener("keydown",e=>{ if(e.key==="Escape"){e.target.value="";renderTable();e.target.blur();} });
 
 load().finally(renderAll);
 </script>
